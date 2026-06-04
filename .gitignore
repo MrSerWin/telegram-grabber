@@ -1,0 +1,19 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+build/
+dist/
+
+# Scraped output — archives, photos and manifest stay local, never committed
+out/
+
+# Your channel list (copy from channels.example.yaml)
+channels.yaml
+
+# IDE
+.idea/
+.vscode/
+.DS_Store

@@ -1,0 +1,13 @@
+# Copy this file to `channels.yaml` and list the channels you want to scrape.
+# `channels.yaml` is git-ignored, so your channel list never ends up in the repo.
+#
+# Run `tg-grabber scrape` (no args) to scrape everything listed here, or pass
+# channel names explicitly to override: `tg-grabber scrape some_channel`.
+
+channels:
+  - example_channel        # channel name without @, as in t.me/s/<name>
+  - another_channel
+
+# Optional global scrape settings (defaults shown):
+delay: 1.0                 # seconds between pages — keep >= 1 to stay polite
+max_pages: 1000            # hard cap on pagination (~20k posts)
