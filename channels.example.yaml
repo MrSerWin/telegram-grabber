@@ -11,3 +11,13 @@ channels:
 # Optional global scrape settings (defaults shown):
 delay: 1.0                 # seconds between pages — keep >= 1 to stay polite
 max_pages: 1000            # hard cap on pagination (~20k posts)
+
+# --- Only needed for the `fetch` command (real files via MTProto) ---
+# Requires `pip install "tg-grabber[mtproto]"` and a one-time interactive login.
+# telegram_api:
+#   api_id: 123456           # from https://my.telegram.org
+#   api_hash: "your_api_hash"
+#   session: tg_grabber      # session file name (git-ignored: *.session)
+# fetch:
+#   types: [video, audio, document, photo]   # which media kinds to download
+#   limit: null              # max messages scanned per channel (null = all)

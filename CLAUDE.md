@@ -5,10 +5,16 @@ The `AGENTS.md` symlink points at this same file.
 
 ## What this is
 
-`tg-grabber` is a scraper for public Telegram channels (text + photos) without
-authentication, via the server-rendered web preview at `t.me/s/<channel>`. It
-saves each post with a `channel` field and a permalink `url`, and photos with a
-manifest, so any reuse can be attributed honestly.
+`tg-grabber` scrapes public Telegram channels. It has two modes:
+
+- **Auth-free** (`scrape` + `media`) via the server-rendered web preview at
+  `t.me/s/<channel>` — text, links, and photo previews only.
+- **MTProto** (`fetch`) via the authenticated Telegram API (Telethon) — the
+  real files: video, audio, documents (PDF/EPUB/TXT/…), full-res photos.
+  Opt-in, needs a login.
+
+Each post keeps a `channel` field and a permalink `url`, and downloaded files
+get a manifest, so any reuse can be attributed honestly.
 
 Full user-facing docs are in [README.md](README.md).
 
@@ -18,17 +24,21 @@ Full user-facing docs are in [README.md](README.md).
 tg-grabber/
 ├── tg_grabber/
 │   ├── __init__.py      ← public API: scrape_channel, download_media
-│   ├── __main__.py      ← CLI: scrape / media
-│   ├── config.py        ← reads channels.yaml (channel list + settings)
-│   ├── scraper.py       ← parses t.me/s/, paginates ?before=
-│   └── media.py         ← downloads photos + manifest.json
+│   ├── __main__.py      ← CLI: scrape / media / fetch
+│   ├── config.py        ← reads channels.yaml (channels, settings, API creds)
+│   ├── scraper.py       ← parses t.me/s/, paginates ?before=  (auth-free)
+│   ├── media.py         ← downloads photo previews + manifest.json (auth-free)
+│   └── fetch.py         ← MTProto file downloader (Telethon, opt-in, auth)
 ├── channels.example.yaml ← config template (in git)
-├── channels.yaml          ← real channel list (in .gitignore)
-├── out/                   ← scrape output (entirely in .gitignore)
+├── channels.yaml          ← real channels + api_id/api_hash (in .gitignore)
+├── out/                   ← all output (entirely in .gitignore)
 │   ├── archives/          ← post archives (JSON)
-│   └── media/
-│       ├── manifest.json  ← attribution
-│       └── <channel>/     ← photos
+│   ├── media/             ← photo previews (from `media`)
+│   │   ├── manifest.json  ← attribution
+│   │   └── <channel>/     ← photos
+│   └── files/             ← real files (from `fetch`)
+│       ├── manifest.json  ← attribution + media_type, original_name
+│       └── <channel>/     ← videos, audio, documents
 ├── docs/channels.md     ← how to configure channels and what's in an archive
 ├── pyproject.toml       ← pip install -e .  → `tg-grabber` command
 └── requirements.txt
@@ -52,15 +62,20 @@ python -m tg_grabber scrape                    # equivalent
 # Scrape a specific channel (no @) — overrides the config
 tg-grabber scrape CHANNEL_NAME                 # → out/archives/telegram_channel_name.json
 
-# Download photos from ALL archives (idempotent — interruptible)
+# Download photo previews from ALL archives (idempotent — interruptible)
 tg-grabber media
 
 # Only from specific channels
 tg-grabber media channel_name
+
+# Download REAL files via MTProto (needs the extra + telegram_api in config)
+pip install -e ".[mtproto]"
+tg-grabber fetch                  # all channels from config
+tg-grabber fetch CHANNEL_NAME     # or a specific one
 ```
 
 Override the config path with `TG_CONFIG`. Output paths come from
-`TG_OUT_DIR` (root), `TG_ARCHIVES_DIR`, `TG_MEDIA_DIR`.
+`TG_OUT_DIR` (root), `TG_ARCHIVES_DIR`, `TG_MEDIA_DIR`, `TG_FILES_DIR`.
 
 ## Data formats
 
@@ -72,12 +87,17 @@ Override the config path with `TG_CONFIG`. Output paths come from
 post_id, source_url, image_url, datetime } }`. This is the attribution
 source-of-truth. Do not change its format — downstream projects rely on it.
 
-## Scraper limitations (not bugs)
+**`out/files/manifest.json`** (from `fetch`) — `{ "<channel>/<name>": {
+channel, post_id, source_url, datetime, media_type, mime, original_name,
+size } }`. Same attribution role for real files.
+
+## Web-preview limitations (not bugs)
 
 - `t.me/s/` serves **text + photo previews only**. Documents (PDF/EPUB),
-  video files, audio, and stickers are unavailable without the MTProto API.
-  Don't try to "fix" this in the current code — it needs a fundamentally
-  different approach (Telethon/Pyrogram + auth).
+  video files, audio, and stickers are unavailable via `scrape`/`media`.
+  This is by design — to get those, use `fetch` (MTProto + login), which is
+  what `tg_grabber/fetch.py` implements. Don't try to make the web scraper
+  fetch files; it can't.
 - Pagination is capped at `max_pages` (default 1000, ~20k posts). If a channel
   is larger, raise `max_pages` in `channels.yaml`.
 - Old CDN links to photos may expire — those land in `failed` and the script
@@ -98,6 +118,8 @@ source-of-truth. Do not change its format — downstream projects rely on it.
   real `channels.yaml`, the contents of `out/`, or any scraped data.
   `.gitignore` blocks this — don't bypass it. Keep doc examples on
   placeholders (`CHANNEL_NAME`, `example_channel`).
+- **Never commit secrets:** `api_id`/`api_hash` live in `channels.yaml` and the
+  `*.session` file is a live login. Both are git-ignored — keep them that way.
 
 ### Attribution (critical)
 - When writing code that uses extracted content, **always** keep the link to

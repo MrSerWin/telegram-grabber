@@ -19,13 +19,25 @@ permalink to the post), so any reuse can be attributed honestly.
    every photo attachment locally. It writes a `manifest.json` next to them
    mapping each file to its `channel`, `post_id`, post permalink, and original
    URL. Idempotent — you can interrupt and resume.
+3. **`tg-grabber fetch`** — downloads the **real files** (videos, audio/music,
+   documents — PDF/EPUB/TXT/…, full-res photos) via the authenticated Telegram
+   MTProto API. This is the only way to get anything beyond text + photo
+   previews. Requires a one-time login. See
+   [Downloading real files](#downloading-real-files-fetch).
 
-## What it does NOT do
+## Two modes: auth-free vs MTProto
 
-The `t.me/s/` web preview only serves **text + photo previews**. Documents
-(PDF, EPUB, books), video files, and audio are absent from the HTML — those
-require the Telegram MTProto API (Telethon/Pyrogram) with a logged-in user.
-This project deliberately stays auth-free.
+| | `scrape` / `media` | `fetch` |
+|---|---|---|
+| Source | `t.me/s/` web preview | MTProto API |
+| Auth | none | one-time login (api_id/api_hash) |
+| Gets | text, links, photo previews | videos, audio, documents, full-res photos |
+| Dependency | base | `tg-grabber[mtproto]` (Telethon) |
+
+The auth-free `t.me/s/` web preview only serves **text + photo previews** —
+videos, audio, and documents (PDF, EPUB, books) are absent from that HTML. To
+download those you must use `fetch`, which talks to the Telegram MTProto API
+with a logged-in user. The auth-free path stays the default; `fetch` is opt-in.
 
 ---
 
@@ -45,6 +57,12 @@ pip install -r requirements.txt
 ```
 
 Dependencies: `requests`, `beautifulsoup4`, `PyYAML`. Python ≥ 3.9.
+
+For the `fetch` command (real files via MTProto), also install the extra:
+
+```bash
+pip install -e ".[mtproto]"        # adds Telethon
+```
 
 ---
 
@@ -103,13 +121,17 @@ out/
 ├── archives/                         ← post archives (JSON)
 │   ├── telegram_channel_name.json
 │   └── telegram_another_channel.json
-└── media/
-    ├── manifest.json                 ← attribution (channel/post_id → source)
-    ├── channel_name/
-    │   ├── 11_0.jpg
-    │   ├── 11_1.jpg
-    │   └── ...
-    └── another_channel/
+├── media/                            ← photo previews (from `media`)
+│   ├── manifest.json                 ← attribution (channel/post_id → source)
+│   ├── channel_name/
+│   │   ├── 11_0.jpg
+│   │   └── ...
+│   └── another_channel/
+└── files/                            ← real files (from `fetch`)
+    ├── manifest.json                 ← attribution + media_type, original_name
+    └── channel_name/
+        ├── 70_book-title.pdf
+        ├── 81_0.mp4
         └── ...
 ```
 
@@ -121,8 +143,55 @@ Paths can be overridden via env vars:
 ```bash
 export TG_OUT_DIR=/path/to/store        # root
 export TG_ARCHIVES_DIR=/path/to/json    # post archives
-export TG_MEDIA_DIR=/path/to/photos     # photo binaries
+export TG_MEDIA_DIR=/path/to/photos     # photo previews
+export TG_FILES_DIR=/path/to/files      # real files (fetch)
 ```
+
+---
+
+## Downloading real files (`fetch`)
+
+`fetch` uses the authenticated Telegram MTProto API to download the actual
+files — videos, audio/music, documents (PDF/EPUB/TXT/…) and full-resolution
+photos — which the auth-free web preview cannot reach.
+
+**1. Install the extra:**
+
+```bash
+pip install -e ".[mtproto]"
+```
+
+**2. Get API credentials** at <https://my.telegram.org> → *API development
+tools* → note your `api_id` and `api_hash`, and add them to `channels.yaml`:
+
+```yaml
+telegram_api:
+  api_id: 123456
+  api_hash: "your_api_hash"
+  session: tg_grabber        # session file name (git-ignored)
+
+fetch:
+  types: [video, audio, document, photo]   # which kinds to download
+  limit: null                # max messages per channel (null = all)
+```
+
+**3. Run it** (the first run logs you in interactively — phone number + the
+code Telegram sends you, plus 2FA password if enabled):
+
+```bash
+tg-grabber fetch                  # all channels from channels.yaml
+tg-grabber fetch CHANNEL_NAME     # or a specific one
+```
+
+Files land in `out/files/<channel>/`, with `out/files/manifest.json` recording
+each file's `channel`, `post_id`, `source_url`, `media_type`, `mime` and
+`original_name`. The run is idempotent — existing files are skipped.
+
+> **Security:** `channels.yaml` holds your `api_id`/`api_hash` and `*.session`
+> is your login — both are git-ignored. Never commit them.
+
+> **Note:** `fetch` accesses Telegram as your logged-in account. Use it only on
+> channels you may lawfully access, and mind each channel's content rights.
 
 ---
 
@@ -180,13 +249,27 @@ from tg_grabber import scrape_channel, download_media
 # Scrape one channel into any folder
 scrape_channel("CHANNEL_NAME", out_dir=Path("./out/archives"))
 
-# Download photos from archives into a given folder
+# Download photo previews from archives into a given folder
 download_media(
     archives_dir="./out/archives",
     media_dir="./out/media",
     channels=["channel_name"],  # None = all archives
     workers=8,
 )
+
+# Download real files via MTProto (needs `tg-grabber[mtproto]` + credentials)
+import asyncio
+from tg_grabber.fetch import fetch_files
+
+asyncio.run(fetch_files(
+    ["channel_name"],
+    api_id=123456,
+    api_hash="your_api_hash",
+    session="tg_grabber",
+    out_dir="./out/files",
+    types=["video", "audio", "document", "photo"],
+    limit=None,
+))
 ```
 
 ---
@@ -208,8 +291,9 @@ open in a browser, and runs with a polite 1-second delay between requests.
 
 ## Known limitations
 
-- **Documents/video/audio are unavailable** — that's a limitation of the
-  Telegram web preview, not the scraper. They need an MTProto client.
+- **Documents/video/audio need `fetch`** — the auth-free `scrape`/`media` path
+  only sees text + photo previews. Use [`fetch`](#downloading-real-files-fetch)
+  (MTProto, with login) for the real files.
 - In posts with albums, photos are stored sequentially
   (`<post_id>_0.jpg`, `_1.jpg`, …).
 - Sometimes CDN links to old photos expire — those files land in `failed`

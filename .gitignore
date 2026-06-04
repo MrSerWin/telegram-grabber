@@ -10,8 +10,12 @@ dist/
 # Scraped output — archives, photos and manifest stay local, never committed
 out/
 
-# Your channel list (copy from channels.example.yaml)
+# Your channel list + API credentials (copy from channels.example.yaml)
 channels.yaml
+
+# Telethon/MTProto login session (never commit)
+*.session
+*.session-journal
 
 # IDE
 .idea/

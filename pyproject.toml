@@ -16,6 +16,10 @@ dependencies = [
   "PyYAML>=6.0",
 ]
 
+[project.optional-dependencies]
+# `fetch` command — download real files (video/audio/docs) via MTProto.
+mtproto = ["telethon>=1.36"]
+
 [project.scripts]
 tg-grabber = "tg_grabber.__main__:main"
 

@@ -39,6 +39,40 @@ Channels passed explicitly on the command line override the config:
 tg-grabber scrape some_channel other_channel
 ```
 
+## `telegram_api` and `fetch` (real files via MTProto)
+
+The `fetch` command downloads the actual files (video, audio, documents,
+full-res photos) that the auth-free web preview can't reach. It needs Telegram
+API credentials and a one-time login. Add these optional sections to
+`channels.yaml` (the same git-ignored file):
+
+```yaml
+telegram_api:
+  api_id: 123456             # from https://my.telegram.org
+  api_hash: "your_api_hash"
+  session: tg_grabber        # session file name (git-ignored: *.session)
+
+fetch:
+  types: [video, audio, document, photo]   # which media kinds to download
+  limit: null                # max messages scanned per channel (null = all)
+```
+
+- **`telegram_api.api_id` / `api_hash`** — required for `fetch`. Get them at
+  <https://my.telegram.org> → *API development tools*.
+- **`telegram_api.session`** — name of the Telethon session file. The first
+  `fetch` run logs you in interactively and creates `<session>.session`
+  (git-ignored). Later runs reuse it.
+- **`fetch.types`** — any subset of `video`, `audio`, `document`, `photo`.
+  `document` covers PDF/EPUB/TXT/DOCX and any other non-media file.
+- **`fetch.limit`** — cap on messages scanned per channel; useful for testing.
+  `null` = the whole channel.
+
+Install the extra first: `pip install -e ".[mtproto]"`. Files are saved to
+`out/files/<channel>/` with an attribution `out/files/manifest.json`.
+
+> Keep `channels.yaml` and `*.session` out of git (they already are) — they
+> contain your API credentials and login.
+
 ## What ends up in an archive
 
 For each channel, `out/archives/telegram_<channel>.json` is created — an array
@@ -50,13 +84,13 @@ thumbnails), `views`, `forwarded_from`. The full format is in
 `tg-grabber media` then downloads the photos from the archives and writes
 `out/media/manifest.json`, attributing each file to its channel and post.
 
-## What is NOT downloaded (a known limitation)
+## What `scrape`/`media` cannot get
 
 The `t.me/s/` web preview only serves text + photo previews. **Documents**
 (PDF, EPUB), **video files**, and **audio** are absent from the channel's HTML
-— that's not a scraper bug but a limitation of Telegram's public interface. To
-fetch those, you need the Telegram MTProto API (Telethon/Pyrogram) with a
-logged-in user.
+— that's not a scraper bug but a limitation of Telegram's public interface. Use
+the `fetch` command (above) to download those over the authenticated MTProto
+API.
 
-URLs of external resources mentioned in posts are saved in each post's `links`
-field — you can fetch them separately with plain HTTP requests.
+URLs of external resources mentioned in posts are also saved in each post's
+`links` field — you can fetch those separately with plain HTTP requests.
