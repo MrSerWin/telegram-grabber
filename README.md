@@ -1,36 +1,35 @@
 # tg-grabber
 
-Скрапит публичные Telegram-каналы и сохраняет полный архив постов + все
-прикреплённые фото локально. **Без авторизации** — использует серверный
-веб-превью `https://t.me/s/<channel>`, который Telegram отдаёт без логина.
+Scrapes public Telegram channels and saves a full archive of posts plus all
+attached photos locally. **No authentication** — it uses the server-rendered
+web preview at `https://t.me/s/<channel>` that Telegram serves without login.
 
-Каждый пост и каждое фото сохраняются вместе с источником (каналом и
-постоянной ссылкой на пост), чтобы любую перепубликацию можно было
-по-честному атрибутировать.
-
----
-
-## Что умеет
-
-1. **`tg-grabber scrape`** — проходит весь архив канала от новейшего к старому
-   (через пагинацию `?before=<id>`), складывает каждый пост в JSON: текст,
-   дата, ссылки в тексте, URL'ы прикреплённых фото и video-thumbnails,
-   просмотры, кто переслал.
-2. **`tg-grabber media`** — берёт уже скачанные архивы и качает все
-   фото-вложения локально. Пишет рядом `manifest.json`, где каждому файлу
-   соответствует `channel`, `post_id`, ссылка на пост и оригинальный URL.
-   Идемпотентно — можно прервать и продолжить.
-
-## Что НЕ умеет
-
-Веб-превью `t.me/s/` отдаёт только **текст + фото-превью**. Документы (PDF,
-EPUB, книги), видео-файлы и аудио в HTML отсутствуют — для них нужен
-Telegram MTProto API (Telethon/Pyrogram) с авторизацией пользователя.
-Этот проект сознательно остаётся без авторизации.
+Every post and every photo is saved together with its source (channel and
+permalink to the post), so any reuse can be attributed honestly.
 
 ---
 
-## Установка
+## What it does
+
+1. **`tg-grabber scrape`** — walks a channel's whole archive from newest to
+   oldest (paginating via `?before=<id>`) and stores each post as JSON: text,
+   date, in-text links, URLs of attached photos and video thumbnails, view
+   count, and who forwarded it.
+2. **`tg-grabber media`** — takes the already-scraped archives and downloads
+   every photo attachment locally. It writes a `manifest.json` next to them
+   mapping each file to its `channel`, `post_id`, post permalink, and original
+   URL. Idempotent — you can interrupt and resume.
+
+## What it does NOT do
+
+The `t.me/s/` web preview only serves **text + photo previews**. Documents
+(PDF, EPUB, books), video files, and audio are absent from the HTML — those
+require the Telegram MTProto API (Telethon/Pyrogram) with a logged-in user.
+This project deliberately stays auth-free.
+
+---
+
+## Installation
 
 ```bash
 git clone <repo>
@@ -39,20 +38,20 @@ python -m venv .venv && source .venv/bin/activate
 pip install -e .
 ```
 
-Или просто:
+Or just:
 
 ```bash
 pip install -r requirements.txt
 ```
 
-Зависимости: `requests`, `beautifulsoup4`, `PyYAML`. Python ≥ 3.9.
+Dependencies: `requests`, `beautifulsoup4`, `PyYAML`. Python ≥ 3.9.
 
 ---
 
-## Настройка каналов
+## Configuring channels
 
-Список каналов и параметры скрапа берутся из `channels.yaml`. Скопируйте
-шаблон и впишите свои каналы:
+The channel list and scrape settings come from `channels.yaml`. Copy the
+template and add your channels:
 
 ```bash
 cp channels.example.yaml channels.yaml
@@ -61,51 +60,51 @@ cp channels.example.yaml channels.yaml
 ```yaml
 # channels.yaml
 channels:
-  - example_channel        # имя без @, как в t.me/s/<name>
+  - example_channel        # name without @, as in t.me/s/<name>
   - another_channel
-delay: 1.0                 # сек между страницами — не опускай ниже 1
-max_pages: 1000            # потолок пагинации (~20k постов)
+delay: 1.0                 # seconds between pages — keep >= 1
+max_pages: 1000            # pagination cap (~20k posts)
 ```
 
-`channels.yaml` в `.gitignore` — ваш список каналов не попадёт в репозиторий.
-Путь к конфигу можно переопределить переменной `TG_CONFIG`.
+`channels.yaml` is git-ignored — your channel list never ends up in the repo.
+Override the config path with the `TG_CONFIG` env var.
 
 ---
 
-## Использование
+## Usage
 
 ```bash
-# Скрапим все каналы из channels.yaml
+# Scrape every channel listed in channels.yaml
 tg-grabber scrape
 
-# Или явно указываем каналы (имя без @) — это переопределяет конфиг
+# Or pass channels explicitly (name without @) — this overrides the config
 tg-grabber scrape CHANNEL_NAME another_channel
 
-# Качаем фото из ВСЕХ архивов
+# Download photos from ALL archives
 tg-grabber media
 
-# Или только из конкретных каналов
+# Or only from specific channels
 tg-grabber media channel_name
 ```
 
-Или через модуль:
+Or via the module:
 
 ```bash
 python -m tg_grabber scrape
 python -m tg_grabber media
 ```
 
-### Куда складывается результат
+### Where output goes
 
-По умолчанию всё кладётся в `./out/`:
+By default everything lands in `./out/`:
 
 ```
 out/
-├── archives/                         ← JSON-архивы постов
+├── archives/                         ← post archives (JSON)
 │   ├── telegram_channel_name.json
 │   └── telegram_another_channel.json
 └── media/
-    ├── manifest.json                 ← атрибуция (channel/post_id → источник)
+    ├── manifest.json                 ← attribution (channel/post_id → source)
     ├── channel_name/
     │   ├── 11_0.jpg
     │   ├── 11_1.jpg
@@ -114,20 +113,20 @@ out/
         └── ...
 ```
 
-`out/` целиком в `.gitignore` — данные и фото остаются локально и не попадают
-в репозиторий.
+The whole `out/` directory is git-ignored — data and photos stay local and
+never get committed.
 
-Пути можно переопределить через env-переменные:
+Paths can be overridden via env vars:
 
 ```bash
-export TG_OUT_DIR=/path/to/store        # корень
-export TG_ARCHIVES_DIR=/path/to/json    # архивы постов
-export TG_MEDIA_DIR=/path/to/photos     # фото-бинарники
+export TG_OUT_DIR=/path/to/store        # root
+export TG_ARCHIVES_DIR=/path/to/json    # post archives
+export TG_MEDIA_DIR=/path/to/photos     # photo binaries
 ```
 
 ---
 
-## Формат архива (`telegram_<channel>.json`)
+## Archive format (`telegram_<channel>.json`)
 
 ```jsonc
 {
@@ -151,9 +150,9 @@ export TG_MEDIA_DIR=/path/to/photos     # фото-бинарники
 }
 ```
 
-## Формат manifest медиа (`media/manifest.json`)
+## Media manifest format (`media/manifest.json`)
 
-Ключ — относительный путь файла, значение — полный источник:
+The key is the file's relative path, the value is its full source:
 
 ```jsonc
 {
@@ -167,61 +166,59 @@ export TG_MEDIA_DIR=/path/to/photos     # фото-бинарники
 }
 ```
 
-Имена файлов: `<channel>/<post_id>_<n>.<ext>` — по имени видно, из какого
-канала и поста.
+File names: `<channel>/<post_id>_<n>.<ext>` — the name alone tells you which
+channel and post a photo came from.
 
 ---
 
-## Программный API
+## Programmatic API
 
 ```python
 from pathlib import Path
 from tg_grabber import scrape_channel, download_media
 
-# Скрап одного канала в любую папку
+# Scrape one channel into any folder
 scrape_channel("CHANNEL_NAME", out_dir=Path("./out/archives"))
 
-# Скачать фото из архивов в указанную папку
+# Download photos from archives into a given folder
 download_media(
     archives_dir="./out/archives",
     media_dir="./out/media",
-    channels=["channel_name"],  # None = все архивы
+    channels=["channel_name"],  # None = all archives
     workers=8,
 )
 ```
 
 ---
 
-## Правило атрибуции
+## Attribution rule
 
-Это **публичный архив**, и контент остаётся собственностью авторов канала.
-Если вы используете извлечённые тексты или фото в своих проектах:
+This is a **public archive**, and the content remains the property of the
+channel authors. If you use extracted text or photos in your own projects:
 
-- Сохраняйте ссылку на оригинальный пост (поле `url` в архиве,
-  `source_url` в manifest).
-- В метаданных вашего датасета указывайте источник в формате
-  `@CHANNEL #post_id` или прямой URL поста.
+- Keep the link to the original post (the `url` field in the archive,
+  `source_url` in the manifest).
+- In your dataset's metadata, cite the source as `@CHANNEL #post_id` or the
+  direct post URL.
 
-Скрапер работает только с **публичными** каналами, читает только то, что
-любой пользователь может открыть в браузере, и идёт с вежливой задержкой
-1 сек между запросами.
+The scraper only works with **public** channels, reads only what any user can
+open in a browser, and runs with a polite 1-second delay between requests.
 
 ---
 
-## Известные ограничения
+## Known limitations
 
-- **Документы/видео/аудио недоступны** — это ограничение веб-превью Telegram,
-  не скрапера. Для них нужен MTProto-клиент.
-- В постах с альбомами все фото складываются последовательно
+- **Documents/video/audio are unavailable** — that's a limitation of the
+  Telegram web preview, not the scraper. They need an MTProto client.
+- In posts with albums, photos are stored sequentially
   (`<post_id>_0.jpg`, `_1.jpg`, …).
-- Иногда CDN-ссылки на старые фото истекают — такие файлы попадают в
-  `failed` (видно в выводе). Повторный запуск может помочь, если ссылка
-  ещё валидна.
-- Скрапер ограничен `max_pages` страниц (по умолчанию 1000, ~20k постов
-  максимум). Поправьте `max_pages` в `channels.yaml`, если канал больше.
+- Sometimes CDN links to old photos expire — those files land in `failed`
+  (shown in the output). A later re-run may help if the link is still valid.
+- The scraper is capped at `max_pages` pages (default 1000, ~20k posts max).
+  Raise `max_pages` in `channels.yaml` if a channel is larger.
 
 ---
 
-## Лицензия
+## License
 
-MIT — см. [LICENSE](LICENSE).
+MIT — see [LICENSE](LICENSE).

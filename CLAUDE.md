@@ -1,143 +1,137 @@
 # CLAUDE.md
 
-Инструкции для Claude Code (и других LLM-агентов) при работе с этим репо.
-Симлинк `AGENTS.md` указывает на этот же файл.
+Instructions for Claude Code (and other LLM agents) working in this repo.
+The `AGENTS.md` symlink points at this same file.
 
-## Что это
+## What this is
 
-`tg-grabber` — скрапер публичных Telegram-каналов (текст + фото) без
-авторизации, через серверный веб-превью `t.me/s/<channel>`. Скрапер
-сохраняет каждый пост с полем `channel` и постоянной ссылкой `url`,
-а фото — с manifest'ом, чтобы любую перепубликацию можно было честно
-атрибутировать.
+`tg-grabber` is a scraper for public Telegram channels (text + photos) without
+authentication, via the server-rendered web preview at `t.me/s/<channel>`. It
+saves each post with a `channel` field and a permalink `url`, and photos with a
+manifest, so any reuse can be attributed honestly.
 
-Полный пользовательский ввод — в [README.md](README.md).
+Full user-facing docs are in [README.md](README.md).
 
-## Структура
+## Layout
 
 ```
 tg-grabber/
 ├── tg_grabber/
-│   ├── __init__.py      ← публичный API: scrape_channel, download_media
+│   ├── __init__.py      ← public API: scrape_channel, download_media
 │   ├── __main__.py      ← CLI: scrape / media
-│   ├── config.py        ← чтение channels.yaml (список каналов + настройки)
-│   ├── scraper.py       ← парсинг t.me/s/, пагинация ?before=
-│   └── media.py         ← скачивание фото + manifest.json
-├── channels.example.yaml ← шаблон конфига (в git)
-├── channels.yaml          ← реальный список каналов (в .gitignore)
-├── out/                   ← результаты скрапа (целиком в .gitignore)
-│   ├── archives/          ← JSON-архивы постов
+│   ├── config.py        ← reads channels.yaml (channel list + settings)
+│   ├── scraper.py       ← parses t.me/s/, paginates ?before=
+│   └── media.py         ← downloads photos + manifest.json
+├── channels.example.yaml ← config template (in git)
+├── channels.yaml          ← real channel list (in .gitignore)
+├── out/                   ← scrape output (entirely in .gitignore)
+│   ├── archives/          ← post archives (JSON)
 │   └── media/
-│       ├── manifest.json  ← атрибуция
-│       └── <channel>/     ← фото
-├── docs/channels.md     ← как настроить каналы и что внутри архива
-├── pyproject.toml       ← pip install -e .  → команда `tg-grabber`
+│       ├── manifest.json  ← attribution
+│       └── <channel>/     ← photos
+├── docs/channels.md     ← how to configure channels and what's in an archive
+├── pyproject.toml       ← pip install -e .  → `tg-grabber` command
 └── requirements.txt
 ```
 
-## Команды
+## Commands
 
 ```bash
-# Установка
-pip install -e .                              # ставит CLI `tg-grabber`
-# или
-pip install -r requirements.txt               # без CLI-команды
+# Install
+pip install -e .                              # installs the `tg-grabber` CLI
+# or
+pip install -r requirements.txt               # without the CLI command
 
-# Настройка: скопировать шаблон и вписать свои каналы
+# Setup: copy the template and add your channels
 cp channels.example.yaml channels.yaml
 
-# Скрап всех каналов из channels.yaml
+# Scrape every channel in channels.yaml
 tg-grabber scrape
-python -m tg_grabber scrape                    # эквивалент
+python -m tg_grabber scrape                    # equivalent
 
-# Скрап конкретного канала (без @) — переопределяет конфиг
+# Scrape a specific channel (no @) — overrides the config
 tg-grabber scrape CHANNEL_NAME                 # → out/archives/telegram_channel_name.json
 
-# Скачать фото из ВСЕХ архивов (идемпотентно — можно прерывать)
+# Download photos from ALL archives (idempotent — interruptible)
 tg-grabber media
 
-# Только из конкретных каналов
+# Only from specific channels
 tg-grabber media channel_name
 ```
 
-Путь к конфигу можно переопределить переменной `TG_CONFIG`. Выходные пути —
-`TG_OUT_DIR` (корень), `TG_ARCHIVES_DIR`, `TG_MEDIA_DIR`.
+Override the config path with `TG_CONFIG`. Output paths come from
+`TG_OUT_DIR` (root), `TG_ARCHIVES_DIR`, `TG_MEDIA_DIR`.
 
-## Форматы данных
+## Data formats
 
-**`out/archives/telegram_<channel>.json`** — массив постов; у каждого:
-`id`, `channel`, `url`, `datetime`, `text`, `links`, `images` (URL'ы),
-`views`, `forwarded_from`. См. [README.md](README.md#формат-архива).
+**`out/archives/telegram_<channel>.json`** — an array of posts; each has
+`id`, `channel`, `url`, `datetime`, `text`, `links`, `images` (URLs),
+`views`, `forwarded_from`. See [README.md](README.md#archive-format-telegram_channeljson).
 
 **`out/media/manifest.json`** — `{ "<channel>/<id>_<n>.jpg": { channel,
-post_id, source_url, image_url, datetime } }`. Это файл-источник атрибуции.
-Формат менять нельзя — на него полагаются downstream-проекты.
+post_id, source_url, image_url, datetime } }`. This is the attribution
+source-of-truth. Do not change its format — downstream projects rely on it.
 
-## Ограничения скрапера (не баги)
+## Scraper limitations (not bugs)
 
-- `t.me/s/` отдаёт **только текст + фото-превью**. Документы (PDF/EPUB),
-  видео-файлы, аудио и стикеры — недоступны без MTProto API. Не пытайся
-  «починить» это в текущем коде — нужен принципиально другой подход
-  (Telethon/Pyrogram + авторизация).
-- Пагинация ограничена `max_pages` (по умолчанию 1000, ~20k постов). Если
-  канал больше — увеличь `max_pages` в `channels.yaml`.
-- Старые CDN-ссылки на фото могут истечь — такие попадают в `failed`,
-  скрипт продолжает работу. Повторный запуск через какое-то время —
-  норма (может, ссылка ожила).
-- Скрапер ходит с задержкой 1 сек между страницами — не уменьшай агрессивно.
+- `t.me/s/` serves **text + photo previews only**. Documents (PDF/EPUB),
+  video files, audio, and stickers are unavailable without the MTProto API.
+  Don't try to "fix" this in the current code — it needs a fundamentally
+  different approach (Telethon/Pyrogram + auth).
+- Pagination is capped at `max_pages` (default 1000, ~20k posts). If a channel
+  is larger, raise `max_pages` in `channels.yaml`.
+- Old CDN links to photos may expire — those land in `failed` and the script
+  carries on. Re-running later is normal (the link may have come back).
+- The scraper waits 1 second between pages — don't reduce this aggressively.
 
-## Правила работы (важно)
+## Working rules (important)
 
-### Этикет
-- **Только публичные каналы.** Не добавляй обходы приватных каналов —
-  это отдельная задача и юридически другая зона.
-- **Не уменьшай `delay` ниже 1 сек.** Скрапер ходит по чужому серверу,
-  быть вежливым — единственная социальная норма этого инструмента.
-- **User-Agent — настоящий браузерный.** Не подделывай боты для обхода
-  каких-то лимитов.
+### Etiquette
+- **Public channels only.** Don't add workarounds for private channels — that
+  is a separate task and a different legal zone.
+- **Don't drop `delay` below 1 second.** The scraper hits someone else's
+  server; being polite is the only social norm of this tool.
+- **Use a real browser User-Agent.** Don't spoof bots to bypass limits.
 
-### Приватность репозитория
-- Это открытый репозиторий. **Не коммить названия конкретных каналов**,
-  реальный `channels.yaml`, содержимое `out/` или любые скрапленные данные.
-  `.gitignore` это блокирует — не обходи. Примеры в доках держи на
-  плейсхолдерах (`CHANNEL_NAME`, `example_channel`).
+### Repository privacy
+- This is an open repository. **Don't commit specific channel names**, the
+  real `channels.yaml`, the contents of `out/`, or any scraped data.
+  `.gitignore` blocks this — don't bypass it. Keep doc examples on
+  placeholders (`CHANNEL_NAME`, `example_channel`).
 
-### Атрибуция (критично)
-- Когда пишешь код, использующий извлечённый контент, **всегда** сохраняй
-  ссылку на пост-источник. Поле `url` в архиве, `source_url` в manifest.
-- В формате ссылки для встраивания в другие датасеты используй
-  `@CHANNEL #post_id`.
-- Не меняй формат `manifest.json` — на него полагается атрибуция в
-  downstream-проектах.
+### Attribution (critical)
+- When writing code that uses extracted content, **always** keep the link to
+  the source post. The `url` field in the archive, `source_url` in the manifest.
+- For links embedded into other datasets, use the `@CHANNEL #post_id` form.
+- Don't change the `manifest.json` format — downstream attribution relies on it.
 
-### Что не делать
-- Не вливай извлечённый текст в чужой датасет автоматически — посты
-  могут быть эссе с авторскими оценками, регулярки дают много шума.
-  Только ручная или полу-ручная сверка с указанием источника.
-- Не коммить бинарные фото и скрапленные архивы в git, даже «временно».
+### What not to do
+- Don't auto-merge extracted text into someone else's dataset — posts may be
+  essays with the author's judgments, and regexes produce a lot of noise.
+  Manual or semi-manual reconciliation only, with the source cited.
+- Don't commit photo binaries or scraped archives to git, even "temporarily."
 
-## Программный API
+## Programmatic API
 
 ```python
 from pathlib import Path
 from tg_grabber import scrape_channel, download_media
 
-# Скрап одного канала
+# Scrape one channel
 scrape_channel("CHANNEL_NAME", out_dir=Path("./out/archives"))
 
-# Загрузка фото из архивов
+# Download photos from archives
 download_media(
     archives_dir="./out/archives",
     media_dir="./out/media",
-    channels=["channel_name"],  # None = все архивы в директории
+    channels=["channel_name"],  # None = all archives in the directory
     workers=8,
 )
 ```
 
-## Какие задачи естественно решать в этом репо
+## Tasks that naturally belong in this repo
 
-- Улучшить парсинг (например, ловить опросы или реакции, если они
-  отдаются в HTML).
-- Дозабрать упавшие фото повторным запуском `media`.
-- Добавить экспорт в другие форматы (CSV, Parquet).
-- Расширить конфиг (например, per-channel настройки).
+- Improve parsing (e.g. capture polls or reactions if they appear in the HTML).
+- Re-fetch failed photos with another `media` run.
+- Add export to other formats (CSV, Parquet).
+- Extend the config (e.g. per-channel settings).
